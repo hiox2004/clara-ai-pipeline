@@ -1,0 +1,41 @@
+{
+  "account_id": "demo_001",
+  "company_name": "ABC Fire Protection",
+  "business_hours": {
+    "days": "Monday, Tuesday, Wednesday, Thursday, Friday, Saturday",
+    "start": "7am",
+    "end": "6pm",
+    "timezone": "Eastern"
+  },
+  "office_address": "123 Main Street, Atlanta, GA",
+  "services_supported": [
+    "Extinguisher"
+  ],
+  "emergency_definition": [
+    "sprinkler leak",
+    "active fire alarm"
+  ],
+  "emergency_routing_rules": {
+    "primary": "Mike Johnson at 404-555-0192",
+    "order": [
+      "Mike Johnson at 404-555-0192",
+      "Sarah Lee at 404-555-0187"
+    ],
+    "fallback": "dispatch@abcfire.com"
+  },
+  "non_emergency_routing_rules": "Collect name, number, and issue description. We will follow up next morning.",
+  "call_transfer_rules": {
+    "timeout_seconds": 45,
+    "retries": 0,
+    "message_if_fails": ""
+  },
+  "integration_constraints": [
+    "ServiceTrade"
+  ],
+  "after_hours_flow_summary": "",
+  "office_hours_flow_summary": "",
+  "questions_or_unknowns": [],
+  "notes": "",
+  "version": "v2",
+  "source": "onboarding_call"
+}

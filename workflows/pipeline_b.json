@@ -1,0 +1,93 @@
+{
+  "name": "Pipeline B - Onboarding to v2 Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst content = fs.readFileSync('/data/transcripts/onboarding/onboarding_001.txt', 'utf8').replace(/^\\uFEFF/, '').trim();\nreturn [{ json: { account_id: 'demo_001', transcript: content, filename: 'onboarding_001.txt' } }];"
+      },
+      "name": "Read Onboarding File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcript = data.transcript;\nconst account_id = data.account_id;\n\nconst prompt = `You are an expert at extracting structured business configuration from onboarding call transcripts.\n\nExtract ONLY the fields that are explicitly confirmed in this onboarding call. Return ONLY valid JSON, no explanation, no markdown.\n\nReturn this structure with only the fields you find:\n{\n  \"account_id\": \"${account_id}\",\n  \"company_name\": \"\",\n  \"business_hours\": { \"days\": \"\", \"start\": \"\", \"end\": \"\", \"timezone\": \"\" },\n  \"office_address\": \"\",\n  \"services_supported\": [],\n  \"emergency_definition\": [],\n  \"emergency_routing_rules\": { \"primary\": \"\", \"order\": [], \"fallback\": \"\" },\n  \"non_emergency_routing_rules\": \"\",\n  \"call_transfer_rules\": { \"timeout_seconds\": null, \"retries\": null, \"message_if_fails\": \"\" },\n  \"integration_constraints\": [],\n  \"after_hours_flow_summary\": \"\",\n  \"office_hours_flow_summary\": \"\",\n  \"questions_or_unknowns\": [],\n  \"notes\": \"\"\n}\n\nRules:\n- Only extract what is EXPLICITLY confirmed. Do not guess.\n- Leave fields blank if not mentioned.\n- Return ONLY the JSON object.\n\nTranscript:\n${transcript}`;\n\nreturn [{ json: { account_id, transcript, prompt } }];"
+      },
+      "name": "Build Onboarding Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "llama3" },
+            { "name": "stream", "value": false },
+            { "name": "prompt", "value": "={{ $json.prompt }}" }
+          ]
+        }
+      },
+      "name": "Extract Onboarding Updates (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.response;\nlet updates;\ntry {\n  const jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\n  if (!jsonMatch) throw new Error('No JSON found');\n  updates = JSON.parse(jsonMatch[0]);\n} catch(e) {\n  return [{ json: { parse_error: true, error_message: e.message, raw_response: raw } }];\n}\nreturn [{ json: { updates, account_id: updates.account_id } }];"
+      },
+      "name": "Parse Onboarding Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst updates = $input.first().json.updates;\nconst account_id = $input.first().json.account_id;\n\n// Load existing v1 memo\nconst v1Path = `/outputs/accounts/${account_id}/v1/account_memo_v1.json`;\nlet v1Memo = {};\ntry {\n  v1Memo = JSON.parse(fs.readFileSync(v1Path, 'utf8'));\n} catch(e) {\n  return [{ json: { error: 'v1 memo not found', path: v1Path } }];\n}\n\n// Track changes\nconst changes = [];\n\nfunction applyUpdate(v1, updates, path = '') {\n  for (const key of Object.keys(updates)) {\n    const newVal = updates[key];\n    const oldVal = v1[key];\n    if (newVal === null || newVal === '' || (Array.isArray(newVal) && newVal.length === 0)) continue;\n    if (typeof newVal === 'object' && !Array.isArray(newVal)) {\n      if (!v1[key]) v1[key] = {};\n      applyUpdate(v1[key], newVal, path + key + '.');\n    } else {\n      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {\n        changes.push({ field: path + key, from: oldVal, to: newVal });\n        v1[key] = newVal;\n      }\n    }\n  }\n}\n\napplyUpdate(v1Memo, updates);\nv1Memo.version = 'v2';\nv1Memo.source = 'onboarding_call';\n\nreturn [{ json: { v2Memo: v1Memo, changes, account_id } }];"
+      },
+      "name": "Merge and Patch v1 to v2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { v2Memo, changes, account_id } = $input.first().json;\nconst bh = v2Memo.business_hours || {};\nconst er = v2Memo.emergency_routing_rules || {};\n\nconst prompt = `You are Clara, an AI receptionist for ${v2Memo.company_name || 'this company'}.\n\nBUSINESS HOURS FLOW (${bh.days || 'Mon-Sat'}, ${bh.start || '7AM'}-${bh.end || '6PM'} ${bh.timezone || 'Eastern'}):\n1. Greet: \"Thank you for calling ${v2Memo.company_name || 'us'}, this is Clara. How can I help you today?\"\n2. Listen to their purpose.\n3. Collect their name and callback number.\n4. Transfer to the appropriate team.\n5. If transfer fails after ${v2Memo.call_transfer_rules?.timeout_seconds || 45} seconds: \"I'm sorry I wasn't able to connect you directly. I've noted your information and someone will call you back shortly. Is there anything else I can help you with?\"\n6. Ask if they need anything else, then close.\n\nAFTER HOURS FLOW:\n1. Greet: \"Thank you for calling ${v2Memo.company_name || 'us'}. You've reached us outside of business hours.\"\n2. Ask the purpose of their call.\n3. Ask: \"Is this an emergency?\"\n4. IF EMERGENCY (${(v2Memo.emergency_definition || []).join(', ')}):\n   - Collect name, callback number, and site address immediately.\n   - Attempt transfer to: ${er.primary || 'on-call technician'}.\n   - Fallback order: ${JSON.stringify(er.order || [])}.\n   - If all transfers fail: \"I wasn't able to reach the on-call team. I've captured your details and dispatched an alert. Someone will reach you very shortly.\"\n5. IF NON-EMERGENCY:\n   - Collect name, number, and brief description.\n   - Confirm: \"I've noted your request and someone will follow up during business hours.\"\n6. Ask if they need anything else, then close.\n\nRULES:\n- Never mention function calls or tools to the caller.\n- Only collect what is needed for routing.\n- Do not ask more questions than necessary.\n${v2Memo.integration_constraints?.length ? '- Constraints: ' + v2Memo.integration_constraints.join('; ') : ''}`;\n\nconst spec = {\n  account_id,\n  agent_name: `Clara - ${v2Memo.company_name || account_id}`,\n  voice_style: 'professional, calm, empathetic',\n  system_prompt: prompt,\n  key_variables: {\n    timezone: bh.timezone || '',\n    business_hours: bh,\n    office_address: v2Memo.office_address || '',\n    emergency_routing: er\n  },\n  tool_invocation_placeholders: ['transfer_call', 'create_ticket', 'lookup_account'],\n  call_transfer_protocol: v2Memo.call_transfer_rules || {},\n  fallback_protocol: 'If all transfers fail, apologize, assure callback, log the attempt.',\n  version: 'v2'\n};\n\nreturn [{ json: { spec, v2Memo, changes, account_id } }];"
+      },
+      "name": "Generate Agent Spec v2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { spec, v2Memo, changes, account_id } = $input.first().json;\nconst fs = require('fs');\n\n// Create v2 directory\nconst dir = `/outputs/accounts/${account_id}/v2`;\nif (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });\n\n// Write v2 memo\nfs.writeFileSync(`${dir}/account_memo_v2.json`, JSON.stringify(v2Memo, null, 2), 'utf8');\n\n// Write v2 spec\nfs.writeFileSync(`${dir}/agent_spec_v2.json`, JSON.stringify(spec, null, 2), 'utf8');\n\n// Write changelog\nconst changelog = {\n  account_id,\n  from_version: 'v1',\n  to_version: 'v2',\n  updated_at: new Date().toISOString(),\n  changes\n};\nfs.writeFileSync(`${dir}/changes.json`, JSON.stringify(changelog, null, 2), 'utf8');\n\n// Also write to /changelog folder\nconst clDir = '/outputs/changelog';\nif (!fs.existsSync(clDir)) fs.mkdirSync(clDir, { recursive: true });\nfs.writeFileSync(`${clDir}/${account_id}_changes.json`, JSON.stringify(changelog, null, 2), 'utf8');\n\nreturn [{ json: { success: true, account_id, files_written: [`${dir}/account_memo_v2.json`, `${dir}/agent_spec_v2.json`, `${dir}/changes.json`], changes_count: changes.length } }];"
+      },
+      "name": "Save All v2 Outputs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": { "main": [[{ "node": "Read Onboarding File", "type": "main", "index": 0 }]] },
+    "Read Onboarding File": { "main": [[{ "node": "Build Onboarding Prompt", "type": "main", "index": 0 }]] },
+    "Build Onboarding Prompt": { "main": [[{ "node": "Extract Onboarding Updates (Ollama)", "type": "main", "index": 0 }]] },
+    "Extract Onboarding Updates (Ollama)": { "main": [[{ "node": "Parse Onboarding Updates", "type": "main", "index": 0 }]] },
+    "Parse Onboarding Updates": { "main": [[{ "node": "Merge and Patch v1 to v2", "type": "main", "index": 0 }]] },
+    "Merge and Patch v1 to v2": { "main": [[{ "node": "Generate Agent Spec v2", "type": "main", "index": 0 }]] },
+    "Generate Agent Spec v2": { "main": [[{ "node": "Save All v2 Outputs", "type": "main", "index": 0 }]] }
+  }
+}

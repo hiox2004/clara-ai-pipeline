@@ -1,0 +1,10 @@
+Agent: Let's confirm your setup details for ABC Fire Protection.
+Client: Sure. Business hours are actually 7am to 6pm Eastern, Monday through Saturday.
+Agent: Got it. Emergency routing?
+Client: Sprinkler leaks go directly to Mike Johnson at 404-555-0192. If he doesn't answer in 45 seconds, try Sarah Lee at 404-555-0187. If both fail, send an SMS alert to dispatch@abcfire.com.
+Agent: Non-emergency after hours?
+Client: Collect name, number, and issue description. We will follow up next morning.
+Agent: Any ServiceTrade rules?
+Client: Never create sprinkler jobs automatically. Extinguisher jobs are fine to create.
+Agent: Transfer timeout?
+Client: 45 seconds, no retries.
