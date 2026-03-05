@@ -6,7 +6,11 @@
       "name": "When clicking 'Execute workflow'",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [240, 300]
+      "position": [
+        0,
+        0
+      ],
+      "id": "613a11b5-abf7-4f9e-9f69-3022447cad62"
     },
     {
       "parameters": {
@@ -15,7 +19,11 @@
       "name": "Read Onboarding File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        224,
+        0
+      ],
+      "id": "425f7ec5-1c38-4d4d-8bcc-2ac2f631e3fb"
     },
     {
       "parameters": {
@@ -24,7 +32,11 @@
       "name": "Build Onboarding Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        448,
+        0
+      ],
+      "id": "cf00cca1-57c9-4beb-97b6-ded7b0cc5a9c"
     },
     {
       "parameters": {
@@ -33,16 +45,30 @@
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "model", "value": "llama3" },
-            { "name": "stream", "value": false },
-            { "name": "prompt", "value": "={{ $json.prompt }}" }
+            {
+              "name": "model",
+              "value": "llama3"
+            },
+            {
+              "name": "stream",
+              "value": false
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            }
           ]
-        }
+        },
+        "options": {}
       },
       "name": "Extract Onboarding Updates (Ollama)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 300]
+      "position": [
+        672,
+        0
+      ],
+      "id": "020ac28a-b3b4-42bb-81b3-cf84709bc6c5"
     },
     {
       "parameters": {
@@ -51,7 +77,11 @@
       "name": "Parse Onboarding Updates",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        880,
+        0
+      ],
+      "id": "b3f0b922-42eb-4bd9-a169-57f8e0345601"
     },
     {
       "parameters": {
@@ -60,16 +90,24 @@
       "name": "Merge and Patch v1 to v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 300]
+      "position": [
+        1104,
+        0
+      ],
+      "id": "b6c77323-de2f-4e03-ac87-af930704e2f0"
     },
     {
       "parameters": {
-        "jsCode": "const { v2Memo, changes, account_id } = $input.first().json;\nconst bh = v2Memo.business_hours || {};\nconst er = v2Memo.emergency_routing_rules || {};\n\nconst prompt = `You are Clara, an AI receptionist for ${v2Memo.company_name || 'this company'}.\n\nBUSINESS HOURS FLOW (${bh.days || 'Mon-Sat'}, ${bh.start || '7AM'}-${bh.end || '6PM'} ${bh.timezone || 'Eastern'}):\n1. Greet: \"Thank you for calling ${v2Memo.company_name || 'us'}, this is Clara. How can I help you today?\"\n2. Listen to their purpose.\n3. Collect their name and callback number.\n4. Transfer to the appropriate team.\n5. If transfer fails after ${v2Memo.call_transfer_rules?.timeout_seconds || 45} seconds: \"I'm sorry I wasn't able to connect you directly. I've noted your information and someone will call you back shortly. Is there anything else I can help you with?\"\n6. Ask if they need anything else, then close.\n\nAFTER HOURS FLOW:\n1. Greet: \"Thank you for calling ${v2Memo.company_name || 'us'}. You've reached us outside of business hours.\"\n2. Ask the purpose of their call.\n3. Ask: \"Is this an emergency?\"\n4. IF EMERGENCY (${(v2Memo.emergency_definition || []).join(', ')}):\n   - Collect name, callback number, and site address immediately.\n   - Attempt transfer to: ${er.primary || 'on-call technician'}.\n   - Fallback order: ${JSON.stringify(er.order || [])}.\n   - If all transfers fail: \"I wasn't able to reach the on-call team. I've captured your details and dispatched an alert. Someone will reach you very shortly.\"\n5. IF NON-EMERGENCY:\n   - Collect name, number, and brief description.\n   - Confirm: \"I've noted your request and someone will follow up during business hours.\"\n6. Ask if they need anything else, then close.\n\nRULES:\n- Never mention function calls or tools to the caller.\n- Only collect what is needed for routing.\n- Do not ask more questions than necessary.\n${v2Memo.integration_constraints?.length ? '- Constraints: ' + v2Memo.integration_constraints.join('; ') : ''}`;\n\nconst spec = {\n  account_id,\n  agent_name: `Clara - ${v2Memo.company_name || account_id}`,\n  voice_style: 'professional, calm, empathetic',\n  system_prompt: prompt,\n  key_variables: {\n    timezone: bh.timezone || '',\n    business_hours: bh,\n    office_address: v2Memo.office_address || '',\n    emergency_routing: er\n  },\n  tool_invocation_placeholders: ['transfer_call', 'create_ticket', 'lookup_account'],\n  call_transfer_protocol: v2Memo.call_transfer_rules || {},\n  fallback_protocol: 'If all transfers fail, apologize, assure callback, log the attempt.',\n  version: 'v2'\n};\n\nreturn [{ json: { spec, v2Memo, changes, account_id } }];"
+        "jsCode": "const { spec: oldSpec, v2Memo, changes, account_id } = $input.first().json;\nconst bh = v2Memo.business_hours || {};\nconst er = v2Memo.emergency_routing_rules || {};\n\n// Safely convert any field to array\nconst toArray = (val) => {\n  if (!val) return [];\n  if (Array.isArray(val)) return val;\n  if (typeof val === 'string') return [val];\n  return [];\n};\n\nconst emergencyDef = toArray(v2Memo.emergency_definition).join(', ') || 'sprinkler leak, fire alarm';\nconst constraints = toArray(v2Memo.integration_constraints);\nconst erOrder = toArray(er.order);\n\nconst prompt = `You are Clara, an AI receptionist for ${v2Memo.company_name || 'this company'}.\n\nBUSINESS HOURS FLOW (${bh.days || 'Mon-Sat'}, ${bh.start || '7AM'}-${bh.end || '6PM'} ${bh.timezone || 'Eastern'}):\n1. Greet: \"Thank you for calling ${v2Memo.company_name || 'us'}, this is Clara. How can I help you today?\"\n2. Listen to their purpose.\n3. Collect their name and callback number.\n4. Transfer to the appropriate team.\n5. If transfer fails after ${v2Memo.call_transfer_rules?.timeout_seconds || 45} seconds: \"I'm sorry I wasn't able to connect you directly. I've noted your information and someone will call you back shortly. Is there anything else I can help you with?\"\n6. Ask if they need anything else, then close.\n\nAFTER HOURS FLOW:\n1. Greet: \"Thank you for calling ${v2Memo.company_name || 'us'}. You've reached us outside of business hours.\"\n2. Ask the purpose of their call.\n3. Ask: \"Is this an emergency?\"\n4. IF EMERGENCY (${emergencyDef}):\n   - Collect name, callback number, and site address immediately.\n   - Attempt transfer to: ${er.primary || 'on-call technician'}.\n   - Fallback order: ${JSON.stringify(erOrder)}.\n   - If all transfers fail: \"I wasn't able to reach the on-call team. I've captured your details and dispatched an alert. Someone will reach you very shortly.\"\n5. IF NON-EMERGENCY:\n   - Collect name, number, and brief description.\n   - Confirm: \"I've noted your request and someone will follow up during business hours.\"\n6. Ask if they need anything else, then close.\n\nRULES:\n- Never mention function calls or tools to the caller.\n- Only collect what is needed for routing.\n- Do not ask more questions than necessary.\n${constraints.length ? '- Constraints: ' + constraints.join('; ') : ''}`;\n\nconst spec = {\n  account_id,\n  agent_name: `Clara - ${v2Memo.company_name || account_id}`,\n  voice_style: 'professional, calm, empathetic',\n  system_prompt: prompt,\n  key_variables: {\n    timezone: bh.timezone || '',\n    business_hours: bh,\n    office_address: v2Memo.office_address || '',\n    emergency_routing: er\n  },\n  tool_invocation_placeholders: ['transfer_call', 'create_ticket', 'lookup_account'],\n  call_transfer_protocol: v2Memo.call_transfer_rules || {},\n  fallback_protocol: 'If all transfers fail, apologize, assure callback, log the attempt.',\n  version: 'v2'\n};\n\nreturn [{ json: { spec, v2Memo, changes, account_id } }];\n"
       },
       "name": "Generate Agent Spec v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 300]
+      "position": [
+        1328,
+        0
+      ],
+      "id": "63128914-6bc5-4a4b-8300-1edbfd013cfb"
     },
     {
       "parameters": {
@@ -78,16 +116,103 @@
       "name": "Save All v2 Outputs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 300]
+      "position": [
+        1552,
+        0
+      ],
+      "id": "7dfc91e3-2a61-48ec-8336-b4bb4f2e45a7"
     }
   ],
+  "pinData": {},
   "connections": {
-    "When clicking 'Execute workflow'": { "main": [[{ "node": "Read Onboarding File", "type": "main", "index": 0 }]] },
-    "Read Onboarding File": { "main": [[{ "node": "Build Onboarding Prompt", "type": "main", "index": 0 }]] },
-    "Build Onboarding Prompt": { "main": [[{ "node": "Extract Onboarding Updates (Ollama)", "type": "main", "index": 0 }]] },
-    "Extract Onboarding Updates (Ollama)": { "main": [[{ "node": "Parse Onboarding Updates", "type": "main", "index": 0 }]] },
-    "Parse Onboarding Updates": { "main": [[{ "node": "Merge and Patch v1 to v2", "type": "main", "index": 0 }]] },
-    "Merge and Patch v1 to v2": { "main": [[{ "node": "Generate Agent Spec v2", "type": "main", "index": 0 }]] },
-    "Generate Agent Spec v2": { "main": [[{ "node": "Save All v2 Outputs", "type": "main", "index": 0 }]] }
-  }
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Read Onboarding File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Onboarding File": {
+      "main": [
+        [
+          {
+            "node": "Build Onboarding Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Onboarding Prompt": {
+      "main": [
+        [
+          {
+            "node": "Extract Onboarding Updates (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Onboarding Updates (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Parse Onboarding Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Onboarding Updates": {
+      "main": [
+        [
+          {
+            "node": "Merge and Patch v1 to v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge and Patch v1 to v2": {
+      "main": [
+        [
+          {
+            "node": "Generate Agent Spec v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Agent Spec v2": {
+      "main": [
+        [
+          {
+            "node": "Save All v2 Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9f52d0d9-ef39-4340-affd-f4a2edb2e67d",
+  "meta": {
+    "instanceId": "a963f6aed17ccc06f510fb0cdbdd0de1d6c3a655e89bb4f4ce4f474ecb9d2f57"
+  },
+  "id": "OsGREovrWXwvJ12Y",
+  "tags": []
 }
