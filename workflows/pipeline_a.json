@@ -1,0 +1,270 @@
+{
+  "name": "Pipeline A - Demo Call to v1 Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3"
+            },
+            {
+              "name": "stream",
+              "value": false
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Extract Account Memo (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        64
+      ],
+      "id": "a4310f3a-7141-4308-8f05-1f89ee898ae2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.response;\nlet memo;\ntry {\n  const jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\n  memo = JSON.parse(jsonMatch[0]);\n} catch(e) {\n  memo = { parse_error: true, raw_response: raw };\n}\nmemo.version = 'v1';\nmemo.source = 'demo_call';\nreturn [{ json: { memo, account_id: memo.account_id } }];"
+      },
+      "name": "Parse Memo JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        304
+      ],
+      "id": "e19d3d28-47e0-4363-8aaa-ca183fb8d8ca"
+    },
+    {
+      "parameters": {
+        "jsCode": "const memo = $input.first().json.memo;\nconst bh = memo.business_hours || {};\nconst er = memo.emergency_routing_rules || {};\n\nconst prompt = `You are Clara, an AI receptionist for ${memo.company_name || 'this company'}.\n\nBUSINESS HOURS FLOW (${bh.days || 'Mon-Fri'}, ${bh.start || '9AM'}-${bh.end || '5PM'} ${bh.timezone || 'local time'}):\n1. Greet: \"Thank you for calling ${memo.company_name || 'us'}, this is Clara. How can I help you today?\"\n2. Listen to their purpose.\n3. Collect their name and callback number.\n4. Transfer to the appropriate team.\n5. If transfer fails after 60 seconds: \"I'm sorry I wasn't able to connect you directly. I've noted your information and someone will call you back shortly. Is there anything else I can help you with?\"\n6. Ask if they need anything else, then close.\n\nAFTER HOURS FLOW:\n1. Greet: \"Thank you for calling ${memo.company_name || 'us'}. You've reached us outside of business hours.\"\n2. Ask the purpose of their call.\n3. Ask: \"Is this an emergency?\"\n4. IF EMERGENCY (${(memo.emergency_definition || []).join(', ') || 'sprinkler leak, fire alarm, flooding'}):\n   - Collect name, callback number, and site address immediately.\n   - Attempt transfer to on-call: ${er.primary || 'on-call technician'}.\n   - If transfer fails: \"I wasn't able to reach the on-call team directly. I've captured your details and dispatched an alert. Someone will reach you very shortly.\"\n5. IF NON-EMERGENCY:\n   - Collect name, number, and brief description.\n   - Confirm: \"I've noted your request and someone will follow up during business hours.\"\n6. Ask if they need anything else, then close.\n\nRULES:\n- Never mention function calls or tools to the caller.\n- Only collect what is needed for routing.\n- Do not ask more questions than necessary.\n- Transfer protocol: attempt transfer, wait, fallback to message if no answer.\n${memo.integration_constraints && memo.integration_constraints.length ? '- Constraints: ' + memo.integration_constraints.join('; ') : ''}`;\n\nconst spec = {\n  account_id: memo.account_id,\n  agent_name: `Clara - ${memo.company_name || memo.account_id}`,\n  voice_style: 'professional, calm, empathetic',\n  system_prompt: prompt,\n  key_variables: {\n    timezone: memo.business_hours?.timezone || '',\n    business_hours: memo.business_hours || {},\n    office_address: memo.office_address || '',\n    emergency_routing: memo.emergency_routing_rules || {}\n  },\n  tool_invocation_placeholders: ['transfer_call', 'create_ticket', 'lookup_account'],\n  call_transfer_protocol: memo.call_transfer_rules || {},\n  fallback_protocol: 'If transfer fails, apologize and assure callback. Log the attempt.',\n  version: 'v1'\n};\n\nreturn [{ json: { spec, account_id: memo.account_id, memo } }];"
+      },
+      "name": "Generate Agent Spec v1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        96
+      ],
+      "id": "427b04bd-92e9-41c6-9fb3-4ff06c97c41c"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/outputs/accounts/demo_001/v1/account_memo_v1.json",
+        "dataPropertyName": "memoFile",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Save Memo JSON",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -16
+      ],
+      "id": "64b774f1-5f62-4616-9633-6a9027bd9748"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/outputs/accounts/demo_001/v1/agent_spec_v1.json",
+        "dataPropertyName": "specFile",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Save Agent Spec JSON",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        272
+      ],
+      "id": "584b79fe-3d8c-40f4-a11d-1490bfe511e1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        176
+      ],
+      "id": "99d1b20e-f897-425d-bb92-decc60a989d2",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "const memo = $input.first().json.memo;\nconst content = JSON.stringify(memo, null, 2);\n\nconst binaryData = await this.helpers.prepareBinaryData(\n  Buffer.from(content, 'utf-8'),\n  'account_memo_v1.json',\n  'application/json'\n);\n\nreturn [{ json: $input.first().json, binary: { memoFile: binaryData } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        -16
+      ],
+      "id": "880a7027-0ca7-4fa3-a544-e377ac2ef4c4",
+      "name": "Prepare Memo Binary"
+    },
+    {
+      "parameters": {
+        "jsCode": "const spec = $input.first().json.spec;\nconst content = JSON.stringify(spec, null, 2);\n\nconst binaryData = await this.helpers.prepareBinaryData(\n  Buffer.from(content, 'utf-8'),\n  'agent_spec_v1.json',\n  'application/json'\n);\n\nreturn [{ json: $input.first().json, binary: { specFile: binaryData } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        272
+      ],
+      "id": "777fad3d-b266-4ff1-978a-1e0a04f80d92",
+      "name": "Prepare Spec Binary"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcript = data.transcript;\nconst account_id = data.account_id;\n\nconst prompt = `You are an expert at extracting structured business information from call transcripts.\n\nExtract the following fields from this transcript and return ONLY valid JSON, no explanation, no markdown:\n\n{\n  \"account_id\": \"${account_id}\",\n  \"company_name\": \"\",\n  \"business_hours\": { \"days\": \"\", \"start\": \"\", \"end\": \"\", \"timezone\": \"\" },\n  \"office_address\": \"\",\n  \"services_supported\": [],\n  \"emergency_definition\": [],\n  \"emergency_routing_rules\": { \"primary\": \"\", \"order\": [], \"fallback\": \"\" },\n  \"non_emergency_routing_rules\": \"\",\n  \"call_transfer_rules\": { \"timeout_seconds\": null, \"retries\": null, \"message_if_fails\": \"\" },\n  \"integration_constraints\": [],\n  \"after_hours_flow_summary\": \"\",\n  \"office_hours_flow_summary\": \"\",\n  \"questions_or_unknowns\": [],\n  \"notes\": \"\"\n}\n\nRules:\n- Only extract what is EXPLICITLY stated. Do not guess or invent.\n- If a field is missing, leave it blank or empty array.\n- Put anything unclear in questions_or_unknowns.\n- Return ONLY the JSON object, nothing else.\n\nTranscript:\n${transcript}`;\n\nreturn [{ json: { account_id, transcript, prompt } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        -16
+      ],
+      "id": "116c70b0-b12b-4db8-86a3-ad7ce8254756",
+      "name": "Build Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst content = fs.readFileSync('/data/transcripts/demo/demo_001.txt', 'utf8').replace(/^\\uFEFF/, '').trim();\nreturn [{ json: { account_id: 'demo_001', transcript: content, filename: 'demo_001.txt' } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1232,
+        80
+      ],
+      "id": "d28cdaf4-9af4-4c85-a081-bf67e9787bc5",
+      "name": "Read Transcript File"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Account Memo (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Parse Memo JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Memo JSON": {
+      "main": [
+        [
+          {
+            "node": "Generate Agent Spec v1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Agent Spec v1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Spec Binary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Memo Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Read Transcript File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Memo Binary": {
+      "main": [
+        [
+          {
+            "node": "Save Memo JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Spec Binary": {
+      "main": [
+        [
+          {
+            "node": "Save Agent Spec JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Extract Account Memo (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Transcript File": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b26b0fdc-548b-4b2a-af73-807a26757fdd",
+  "meta": {
+    "instanceId": "a963f6aed17ccc06f510fb0cdbdd0de1d6c3a655e89bb4f4ce4f474ecb9d2f57"
+  },
+  "id": "Ipc2hL3FIE5l7MA9",
+  "tags": []
+}

@@ -1,0 +1,24 @@
+{
+  "account_id": "demo_001",
+  "company_name": "",
+  "business_hours": {},
+  "office_address": "",
+  "services_supported": [],
+  "emergency_definition": [],
+  "emergency_routing_rules": {},
+  "non_emergency_routing_rules": "",
+  "call_transfer_rules": {
+    "timeout_seconds": null,
+    "retries": null,
+    "message_if_fails": ""
+  },
+  "integration_constraints": [],
+  "after_hours_flow_summary": "",
+  "office_hours_flow_summary": "",
+  "questions_or_unknowns": [
+    "~)^�+-zo�"
+  ],
+  "notes": "",
+  "version": "v1",
+  "source": "demo_call"
+}

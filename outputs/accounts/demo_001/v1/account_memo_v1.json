@@ -1,0 +1,39 @@
+{
+  "account_id": "demo_001",
+  "company_name": "ABC Fire Protection",
+  "business_hours": {
+    "days": "Monday to Friday",
+    "start": "8am",
+    "end": "5pm",
+    "timezone": "Eastern"
+  },
+  "office_address": "123 Main Street, Atlanta, GA",
+  "services_supported": [
+    "sprinkler systems",
+    "fire alarms"
+  ],
+  "emergency_definition": [
+    "sprinkler leak",
+    "active fire alarm"
+  ],
+  "emergency_routing_rules": {
+    "primary": "on-call tech",
+    "order": [],
+    "fallback": ""
+  },
+  "non_emergency_routing_rules": "next business day",
+  "call_transfer_rules": {
+    "timeout_seconds": null,
+    "retries": null,
+    "message_if_fails": ""
+  },
+  "integration_constraints": [
+    "ServiceTrade"
+  ],
+  "after_hours_flow_summary": "",
+  "office_hours_flow_summary": "",
+  "questions_or_unknowns": [],
+  "notes": "",
+  "version": "v1",
+  "source": "demo_call"
+}
