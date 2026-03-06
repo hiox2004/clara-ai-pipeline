@@ -121,6 +121,21 @@
         0
       ],
       "id": "7dfc91e3-2a61-48ec-8336-b4bb4f2e45a7"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        -120
+      ],
+      "id": "f1a2b3c4-d5e6-7890-abcd-ef0123456789",
+      "name": "Merge Onboarding"
     }
   ],
   "pinData": {},
@@ -154,11 +169,27 @@
             "node": "Extract Onboarding Updates (Ollama)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Merge Onboarding",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
     "Extract Onboarding Updates (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Merge Onboarding",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Onboarding": {
       "main": [
         [
           {

@@ -159,6 +159,11 @@
             "node": "Generate Agent Spec v1",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Prepare Memo Binary",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -168,11 +173,6 @@
         [
           {
             "node": "Prepare Spec Binary",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Prepare Memo Binary",
             "type": "main",
             "index": 0
           }
