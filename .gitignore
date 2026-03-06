@@ -17,5 +17,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# Outputs (optional - remove if you want to track outputs)
-# outputs/
+# Generated outputs — keep folder structure but not the JSON files
+outputs/accounts/*/
+outputs/changelog/*.json
+
+# n8n local data
+n8n_data/
